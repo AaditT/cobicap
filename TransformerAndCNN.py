@@ -498,7 +498,11 @@ test_image_paths = list(test_set.keys())
 def generate_caption(image_path):
     image = preprocess_image(image_path)
     image = tf.expand_dims(image, 0)
+
     image_features = caption_model.cnn_model(image)
+
+    # print(image_features[0:10])
+
     encoder_output = caption_model.encoder(image_features, training=False)
 
     decoded_caption = ["<start>"]
@@ -551,6 +555,8 @@ def calculate_bleu_scores(actual_captions, predicted_caption):
     # Ensure predicted_caption is a list of tokens, not a single string
     predicted_caption_tokens = [predicted_caption.split()]  # Nested list for corpus_bleu
 
+    # print(predicted_caption_tokens[0:5])
+
     # Calculate BLEU scores
     bleu1 = corpus_bleu([processed_captions], predicted_caption_tokens, weights=(1.0, 0, 0, 0))
     bleu2 = corpus_bleu([processed_captions], predicted_caption_tokens, weights=(0.5, 0.5, 0, 0))
@@ -572,10 +578,15 @@ def visualize_results(dataset, predicted_captions, bleu_score_func, num_samples)
 
     for i, image_path in enumerate(selected_paths, 1):
         actual_captions = dataset[image_path]
+
+        # print(len(actual_captions))
+
         actual_captions = [caption.replace("<start>", "").replace("<end>", "").strip() for caption in actual_captions]
 
         predicted_caption = predicted_captions.get(image_path, "No caption generated")
         bleu_scores = bleu_score_func(actual_captions, predicted_caption)  # Assume that the function is correctly defined
+
+        # print(len(bleu_scores))
 
         image = load_img(image_path, target_size=(299, 299))  # Adjust target size as needed
         ax_image = fig.add_subplot(num_samples, 2, 2 * i - 1)
