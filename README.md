@@ -9,3 +9,5 @@
 `LSTM_Van_Bi.py` contains code for the Vanilla LSTM and Bi-LSTM.
 
 `gru_attention.ipynb` contains code for our attention-aware GRU-based model.
+
+`TransformerAndCNN.py` contains code for our CNN-Transformer model.
