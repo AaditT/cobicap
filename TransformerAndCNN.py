@@ -35,12 +35,18 @@ FF_UNITS = 156  # Number of units in feed-forward layer
 BATCH_SIZE = 256  # Batch size for training
 NUM_EPOCHS = 10  # Number of epochs to train for
 
+"""
+First step was to take the Flickr8k dataset and preprocess it with steps such as caption normalization and length filtering.
+The images also had to be preprocessed with steps such as resizing.
+"""
+
 def load_and_prepare_image(path, target_size):
     # Load the image from the path and resize it
     return load_img(path, target_size=target_size)
 
 def clean_captions(captions):
     # Strip the start and end tokens from captions and trim whitespace
+    # print(len(captions))
     return [caption.replace("<start>", "").replace("<end>", "").strip() for caption in captions]
 
 def select_random_images(image_paths, num_samples):
@@ -50,6 +56,7 @@ def select_random_images(image_paths, num_samples):
 def visualize_results(dataset, predicted_captions, bleu_score_func, num_samples):
     selected_paths = select_random_images(list(dataset.keys()), num_samples)
     fig = plt.figure(figsize=(6, 20))  # Tall figure for displaying images and captions
+    # fig = plt.figure(figsize=(3, 5))  # Smaller figure size for report screenshots
     image_index = 1
 
     for image_path in selected_paths:
@@ -61,16 +68,18 @@ def visualize_results(dataset, predicted_captions, bleu_score_func, num_samples)
         # Display image
         ax_image = fig.add_subplot(num_samples, 2, image_index, xticks=[], yticks=[])
         ax_image.imshow(image)
+
+        # image_index ++
         image_index += 1
 
-        # Display captions and BLEU scores
+        # show captions and BLEU scores
         ax_captions = fig.add_subplot(num_samples, 2, image_index)
         plt.axis('off')
         ax_captions.set_xlim(0, 1)
         ax_captions.set_ylim(0, len(bleu_scores))
 
         for i, score in enumerate(bleu_scores):
-            ax_captions.text(0, i, f'Score: {score:.2f}', fontsize=10)
+            ax_captions.text(0, i, f'The score is: {score:.2f}', fontsize=10)
 
         image_index += 1
 
@@ -87,14 +96,16 @@ def process_caption_line(line, skipped_images, caption_map):
     """Processes a single line of the caption file."""
     img_file, caption_text = line.strip().split(",", 1)
     img_file = os.path.join(IMG_DIR, img_file.strip())
+    # print(img_file)
 
     caption_words = caption_text.strip().split()
     if len(caption_words) < 5 or len(caption_words) > MAX_SEQ_LEN:
         skipped_images.add(img_file)
         return None
 
-    if img_file.endswith("jpg") and img_file not in skipped_images:
+    if (img_file.endswith("jpg") or img_file.endswith("png")) and img_file not in skipped_images:
         formatted_caption = "<start> " + caption_text.strip() + " <end>"
+        # formatted_caption = "<start> " + caption_text + " <end>" # needed to add a strip to remove leading and trailing spaces
         return img_file, formatted_caption
     return None
 
@@ -106,14 +117,17 @@ def update_caption_map(img_file, formatted_caption, caption_map):
         caption_map[img_file] = [formatted_caption]
 
 def load_caption_data(file_path):
-    caption_lines = read_caption_file(file_path)
+    caption_lines = read_caption_file(file_path + "")
     caption_map = {}
     captions = []
     skipped_images = set()
 
     for line in caption_lines:
         result = process_caption_line(line, skipped_images, caption_map)
-        if result:
+        if not result:
+            # print("line was not in caption")
+            continue
+        else:
             img_file, formatted_caption = result
             update_caption_map(img_file, formatted_caption, caption_map)
             captions.append(formatted_caption)
@@ -153,6 +167,8 @@ def create_image_augmenter():
 text_vectorizer = configure_text_vectorizer(standardize_text)
 text_vectorizer.adapt(captions_list)
 
+# print(len(caption_list)) # mistmatch error, take a look later;
+
 image_augmenter = create_image_augmenter()
 
 # Converting tensors to strings
@@ -161,15 +177,18 @@ processed_captions = [str(standardize_text(caption).numpy())[2:-1] for caption i
 # Assuming necessary global variables and preprocess_text are defined
 def preprocess_text(text):
     lowercase_text = tf.strings.lower(text)
-    remove_chars = "!\"#$%&'()*+,-./:;=?@[\\]^_`{|}~1234567890"
+    # remove_chars = "!\"#$%&'()*+,-./:;=?@[\\]^_`{|}~" # needed to add numbers
+    remove_chars = "!\"#$%&'()*+,-./:;=?@[\\]^_`{|}~1234567890" # used same list as before
     return tf.strings.regex_replace(lowercase_text, "[%s]" % re.escape(remove_chars), "")
 
 def preprocess_captions(captions):
     """Process a list of captions through the preprocess_text function and convert to strings."""
     return [str(preprocess_text(caption).numpy())[2:-1] for caption in captions]
 
+# new visaulizer needed for report data and comparison
+# took previous visualizer and edited
 def visualize_data(dataset, num_samples):
-    fig = plt.figure(figsize=(10, 20))
+    fig = plt.figure(figsize=(10, 10))
     img_count = 1
 
     # Ensure we do not go out of index range
@@ -177,7 +196,7 @@ def visualize_data(dataset, num_samples):
 
     for img_file in sample_keys:
         # Process captions for the image
-        captions = preprocess_captions(dataset[img_file])
+        captions = preprocess_captions(dataset[img_file]) # call preprocessor
         # Load and prepare image
         img = load_img(img_file, target_size=(199, 199, 3))
 
@@ -191,6 +210,7 @@ def visualize_data(dataset, num_samples):
         plt.axis('off')
         ax_captions.plot()
         ax_captions.set_xlim(0, 1)
+        # ax_captions.set_xlim(0, len(captions))
         ax_captions.set_ylim(0, len(captions))
 
         for i, caption in enumerate(captions):
@@ -205,22 +225,22 @@ def visualize_data(dataset, num_samples):
 visualize_data(train_set, num_samples=7)
 
 def get_caption_lengths(captions):
-    """Calculate the lengths of captions in terms of words."""
+    """Calculate # of words in captions"""
     return [len(caption.split(' ')) for caption in captions]
 
 def plot_caption_lengths(captions):
-    """Plot the distribution of caption lengths."""
+    """Plot distribution of caption lengths."""
     plt.figure(figsize=(15, 7), dpi=300)
     sns.set_style('darkgrid')
 
     caption_lengths = get_caption_lengths(captions)
     sns.histplot(x=caption_lengths, kde=True, binwidth=1)
 
-    plt.title('Caption Length Distribution', fontsize=15, fontweight='bold')
+    plt.title('Caption Length Distribution', fontsize=15)
     plt.xticks(fontweight='bold')
     plt.yticks(fontweight='bold')
-    plt.xlabel('Length', fontweight='bold')
-    plt.ylabel('Frequency', fontweight='bold')
+    plt.xlabel('Length')
+    plt.ylabel('Frequency')
     plt.show()
 
 # Example usage assuming 'processed_captions' is defined
@@ -229,32 +249,53 @@ plot_caption_lengths(processed_captions)
 def preprocess_image(image_path):
     """Load and preprocess an image."""
     img = tf.io.read_file(image_path)
-    img = tf.image.decode_jpeg(img, channels=3)
+    img = tf.image.decode_jpeg(img, channels=3) # not sure if this is right
     img = tf.image.resize(img, IMG_DIMENSIONS)
+
+    # img = tf.image.decode_jpeg(img) # channels?, error thrown
+
     img = tf.image.convert_image_dtype(img, tf.float32)
     return img
 
 def vectorize_captions(captions):
     """Apply text vectorization to list of captions."""
+    # print(f"Vectorizing {len(captions)} captions...")
     return text_vectorizer(captions)
 
 def prepare_data(image_path, captions):
     """Prepare tuple of processed image and vectorized captions."""
     processed_image = preprocess_image(image_path)
+    # print(f"Processed image shape: {processed_image.shape}")
     vectorized_captions = vectorize_captions(captions)
+    # print(f"Vectorized captions shape: {vectorized_captions.shape}")
     return processed_image, vectorized_captions
 
 def create_dataset(image_paths, caption_lists):
     """Create a tf.data.Dataset from image paths and captions."""
+    # print(f"Creating dataset with {len(image_paths)} images and {len(caption_lists)} caption lists...")
     dataset = tf.data.Dataset.from_tensor_slices((image_paths, caption_lists))
     dataset = dataset.shuffle(8 * BATCH_SIZE)  # Shuffle the dataset
+    # print(f"Shuffled dataset size: {len(dataset)}")
     dataset = dataset.map(prepare_data, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Batching needed
     dataset = dataset.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
+    # print(f"Final dataset size (batched): {len(dataset)}")
     return dataset
 
 # Assuming train_set and val_set are dictionaries with image paths as keys and lists of captions as values
 train_dataset = create_dataset(list(train_set.keys()), list(train_set.values()))
 val_dataset = create_dataset(list(val_set.keys()), list(val_set.values()))
+
+# print(f"Train dataset size: {len(train_dataset)}")
+# print(f"Validation dataset size: {len(val_dataset)}")
+
+"""
+We decided that it makes the most sense to start with a pretrained CNN as we did not have the resources or the time to train a computer vision CNN from the ground up.
+We were debating between using InceptionV3 and EfficientNet. Although InceptionV3 seems to perform better at a very large scale, EfficientNet, as the name suggest,
+seems to outperform other CNNs at its complexity level, indicating that it is more resource-efficient and seems better for the image captioning task that doesn't
+require extremely performant or complicated training or inference. That is why we decided to go with EfficientNetB0 CNN.
+"""
 
 def create_cnn_model(img_dimensions):
     base_model = tf.keras.applications.EfficientNetB0(
@@ -262,10 +303,21 @@ def create_cnn_model(img_dimensions):
         include_top=False,
         weights="imagenet"
     )
+
+    # print(f"Base model loaded: {base_model}")
+
     base_model.trainable = False
     x = layers.Reshape((-1, base_model.output.shape[-1]))(base_model.output)
     cnn_model = models.Model(inputs=base_model.input, outputs=x)
+    # print(f"CNN model created: {cnn_model.summary()}")
     return cnn_model
+
+"""
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+TRANSFORMER CODE
+
+We also applied positional encoding to the input of both the encoder and the decoder to ensure that we retained positional data about the image features and the words in the caption.
+"""
 
 class TransformerEncoder(layers.Layer):
     def __init__(self, embedding_dim, dense_dim, num_heads, **kwargs):
@@ -276,10 +328,12 @@ class TransformerEncoder(layers.Layer):
         self.norm2 = layers.LayerNormalization()
 
     def call(self, inputs, training=False):
+        # print(f"Encoder input shape: {inputs.shape}")
         x = self.norm1(inputs)
         x = self.dense(x)
         attn_output = self.attention(x, x, x, training=training)
         x = self.norm2(x + attn_output)
+        # print(f"Encoder output shape: {x.shape}")
         return x
 
 class PositionalEmbedding(layers.Layer):
@@ -290,9 +344,11 @@ class PositionalEmbedding(layers.Layer):
         self.embedding_scale = tf.sqrt(tf.cast(embedding_dim, tf.float32))
 
     def call(self, inputs):
+        # print(f"Positional embedding input shape: {inputs.shape}")
         positions = tf.range(tf.shape(inputs)[-1])
         tokens = self.token_embeddings(inputs) * self.embedding_scale
         positions = self.position_embeddings(positions)
+        # print(f"Positional embedding output shape: {tokens.shape}")
         return tokens + positions
 
     def compute_mask(self, inputs, mask=None):
@@ -314,6 +370,7 @@ class TransformerDecoder(layers.Layer):
         self.dropout2 = layers.Dropout(0.5)
 
     def call(self, inputs, encoder_outputs, training=False, mask=None):
+        # print(f"Decoder input shape: {inputs.shape}")
         attn1 = self.attention1(inputs, inputs, inputs, attention_mask=self.get_causal_attention_mask(inputs))
         out1 = self.norm1(inputs + attn1)
         attn2 = self.attention2(out1, encoder_outputs, encoder_outputs, attention_mask=mask)
@@ -321,6 +378,7 @@ class TransformerDecoder(layers.Layer):
         ffn_output = self.ffn(out2)
         ffn_output = self.dropout1(ffn_output, training=training)
         ffn_output = self.norm3(ffn_output + out2)
+        # print(f"Decoder output shape: {ffn_output.shape}")
         return self.dropout2(ffn_output, training=training)
 
     def get_causal_attention_mask(self, inputs):
@@ -345,19 +403,31 @@ class ImageCaptioningModel(models.Model):
         images, captions = inputs
         if self.image_augmenter and training:
             images = self.image_augmenter(images)
+        # print(f"Input images shape: {images.shape}")
+        # print(f"Input captions shape: {captions.shape}")
         image_features = self.cnn_model(images)
+        # print(f"Image features shape: {image_features.shape}")
         encoder_outputs = self.encoder(image_features, training=training)
+        # print(f"Encoder outputs shape: {encoder_outputs.shape}")
         decoder_outputs = self.decoder(captions, encoder_outputs, training=training)
+        # print(f"Decoder outputs shape: {decoder_outputs.shape}")
         return decoder_outputs
 
     @property
     def metrics(self):
         return [self.loss_tracker, self.acc_tracker]
 
+"""
+TRANSFORMER CODE
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+"""
+
 cnn_model = create_cnn_model()
 encoder = TransformerEncoder(embedding_dim=EMBEDDING_DIM, dense_dim=FF_UNITS, num_heads=2)
 decoder = TransformerDecoder(embedding_dim=EMBEDDING_DIM, ff_dim=FF_UNITS, num_heads=3)
 caption_model = ImageCaptioningModel(cnn_model=cnn_model, encoder=encoder, decoder=decoder, image_augmenter=image_augmenter)
+
+# print(f"Caption model created: {caption_model.summary()}")
 
 # Define the loss function with non-reduction at logit computation
 cross_entropy_loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction='none')
@@ -392,11 +462,15 @@ learning_rate_schedule = LinearWarmupLearningRateSchedule(
     warmup_steps=num_warmup_steps
 )
 
+# print(f"Learning rate schedule created with {num_warmup_steps} warmup steps")
+
 # Compile the model with the optimizer using the defined learning rate schedule
 caption_model.compile(
     optimizer=keras.optimizers.Adam(learning_rate=learning_rate_schedule),
     loss=cross_entropy_loss
 )
+
+# print(f"Model compiled with Adam optimizer and learning rate schedule")
 
 # Train the model with specified dataset, validation data, and callbacks
 training_history = caption_model.fit(
@@ -405,6 +479,8 @@ training_history = caption_model.fit(
     validation_data=validation_dataset,
     callbacks=[early_stopping_callback]
 )
+
+# print(f"Model training completed")
 
 # Assuming vocabulary and text_vectorizer are already defined
 vocabulary = text_vectorizer.get_vocabulary()
