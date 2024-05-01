@@ -1,3 +1,9 @@
+"""
+### Note
+Data setup and general methodology was inspired by https://www.kaggle.com/code/saeedghamshadzai/image-captioning-transformers-flickr8k/notebook
+and https://www.kaggle.com/code/abubow/image-caption-generation-code
+"""
+
 import os
 import warnings
 import re
@@ -9,7 +15,7 @@ from collections import Counter
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.graph_objects as go  # Might use this later for interactive plots
+import plotly.graph_objects as go  # Will use this later for interactive plots
 import tensorflow as tf
 import keras
 from tensorflow.keras.utils import to_categorical, plot_model
@@ -21,7 +27,7 @@ import numpy as np
 # Set up some global variables
 IMG_DIR = "/kaggle/input/flickr8k/Images"
 CAPTION_FILE = "/kaggle/input/flickr8k/captions.txt"
-IMG_DIMENSIONS = (299, 299)  # I think this is for EfficientNet, but I could be wrong
+IMG_DIMENSIONS = (299, 299)  # for EfficientNet
 MAX_SEQ_LEN = 15  # Max length of captions
 VOCAB_SIZE = 5000  # Number of words in vocabulary
 EMBEDDING_DIM = 256  # Embedding dimension for words
@@ -118,7 +124,7 @@ def load_caption_data(file_path):
 
     return caption_map, captions
 
-# I'll visualize the results later, after I've trained the model
+# Second visualization will be done after training model
 visualize_results(test_set, predicted_captions, calculate_bleu_scores, num_samples=7)
 
 def standardize_text(text):
@@ -241,7 +247,7 @@ def prepare_data(image_path, captions):
 def create_dataset(image_paths, caption_lists):
     """Create a tf.data.Dataset from image paths and captions."""
     dataset = tf.data.Dataset.from_tensor_slices((image_paths, caption_lists))
-    dataset = dataset.shuffle(BATCH_SIZE * 8)  # Shuffle the dataset
+    dataset = dataset.shuffle(8 * BATCH_SIZE)  # Shuffle the dataset
     dataset = dataset.map(prepare_data, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
     return dataset
